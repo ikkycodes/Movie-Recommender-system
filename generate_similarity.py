@@ -1,9 +1,17 @@
+import os
 import pickle
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-print("Loading movies_list.pkl...")
-movies = pickle.load(open('movies_list.pkl', 'rb'))
+# Resolve the data files relative to this script so the tool works no matter
+# which directory it is launched from.
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MOVIES_PATH = os.path.join(BASE_DIR, "movies_list.pkl")
+SIM_PATH = os.path.join(BASE_DIR, "similarity.pkl")
+
+print(f"Loading {MOVIES_PATH}...")
+with open(MOVIES_PATH, "rb") as f:
+    movies = pickle.load(f)
 print(f"Loaded: {movies.shape}")
 
 print("Vectorizing tags with CountVectorizer...")
@@ -15,6 +23,7 @@ print("Computing cosine similarity (this may take 1-2 mins)...")
 similarity = cosine_similarity(vectors)
 print(f"Similarity shape: {similarity.shape}")
 
-print("Saving similarity.pkl...")
-pickle.dump(similarity, open('similarity.pkl', 'wb'))
+print(f"Saving {SIM_PATH}...")
+with open(SIM_PATH, "wb") as f:
+    pickle.dump(similarity, f)
 print("Done! similarity.pkl created.")
