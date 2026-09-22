@@ -1,0 +1,13 @@
+# Install with:  pip install -r requirements.txt
+#
+# This is the file the .devcontainer configuration installs automatically when
+# a GitHub Codespace is created, so keep the name spelled "requirements.txt".
+#
+# Note: similarity.pkl is NOT required. app.py rebuilds the similarity matrix
+# from movies_list.pkl["tags"] when that file is missing, and scikit-learn is
+# what makes that fallback work.
+pandas
+numpy
+scikit-learn
+streamlit
+requests

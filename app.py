@@ -143,7 +143,8 @@ def load_pickles(movies_path=None, sim_path=None):
         similarity = _build_tags_similarity(movies_path)
     except ImportError as e:
         return None, None, None, (
-            f"{e} - install the dependencies with `pip install -r requirment.txt`."
+            f"{e} - rebuilding the similarity matrix needs scikit-learn; install the "
+            "dependencies with `pip install -r requirements.txt`."
         )
     except Exception as e:
         return None, None, None, f"{type(e).__name__}: {e}"
