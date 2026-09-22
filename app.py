@@ -93,12 +93,14 @@ def _data_path(filename):
 
 
 def load_pickles(movies_path=None, sim_path=None):
-    """Return (movies, similarity, info_or_None, error_or_None).
+    """Return (movies, similarity, error_or_None).
 
     similarity.pkl is used when it is present and consistent; otherwise the
     similarity matrix is computed from movies_list.pkl['tags'] on the fly, so
     the app also works from a plain clone or a GitHub Codespace where the
-    800 MB pre-computed file cannot exist.
+    800 MB pre-computed file cannot exist. Switching between the two is
+    silent: both produce the same neighbours, so there is nothing the user
+    needs to do either way.
     """
     movies_path = _data_path(movies_path or "movies_list.pkl")
     sim_path = _data_path(sim_path or "similarity.pkl")
@@ -106,12 +108,12 @@ def load_pickles(movies_path=None, sim_path=None):
     try:
         movies = _load_movies_cached(movies_path)
     except FileNotFoundError as e:
-        return None, None, None, f"Missing data file: {e.filename}"
+        return None, None, f"Missing data file: {e.filename}"
     except Exception as e:
-        return None, None, None, f"{type(e).__name__}: {e}"
+        return None, None, f"{type(e).__name__}: {e}"
 
     if not hasattr(movies, "columns") or "title" not in movies.columns:
-        return None, None, None, "`movies_list.pkl` must be a pandas DataFrame with a 'title' column."
+        return None, None, "`movies_list.pkl` must be a pandas DataFrame with a 'title' column."
 
     # The search below indexes the matrix by position (`similarity[idx]`) and
     # reads the results back with iloc, so a non-default index would silently
@@ -119,22 +121,22 @@ def load_pickles(movies_path=None, sim_path=None):
     if movies.index.tolist() != list(range(len(movies))):
         movies = movies.reset_index(drop=True)
 
-    note = None
+    ignored = None
     if os.path.exists(sim_path):
         try:
             similarity = _load_similarity_cached(sim_path)
             if len(similarity) == len(movies):
-                return movies, similarity, None, None
-            note = (
+                return movies, similarity, None
+            ignored = (
                 f"`similarity.pkl` holds {len(similarity)} rows but there are "
                 f"{len(movies)} movies, so it was ignored."
             )
         except Exception as e:
-            note = f"`similarity.pkl` could not be read ({type(e).__name__}: {e}), so it was ignored."
+            ignored = f"`similarity.pkl` could not be read ({type(e).__name__}: {e}), so it was ignored."
 
     if "tags" not in movies.columns:
-        prefix = f"{note} " if note else ""
-        return None, None, None, (
+        prefix = f"{ignored} " if ignored else ""
+        return None, None, (
             f"{prefix}There is no usable `similarity.pkl` and `movies_list.pkl` has no "
             "'tags' column to rebuild it from."
         )
@@ -142,23 +144,14 @@ def load_pickles(movies_path=None, sim_path=None):
     try:
         similarity = _build_tags_similarity(movies_path)
     except ImportError as e:
-        return None, None, None, (
+        return None, None, (
             f"{e} - rebuilding the similarity matrix needs scikit-learn; install the "
             "dependencies with `pip install -r requirements.txt`."
         )
     except Exception as e:
-        return None, None, None, f"{type(e).__name__}: {e}"
+        return None, None, f"{type(e).__name__}: {e}"
 
-    info = (
-        "`similarity.pkl` is not present (it is ~800 MB, so it is not kept in the "
-        "repository), so similarities are being computed from the `tags` column with "
-        "the same CountVectorizer and cosine similarity settings, one row at a time. "
-        "No large file is required. Run `python generate_similarity.py` if you would "
-        "rather cache the full matrix to disk."
-    )
-    if note:
-        info = f"{note} {info}"
-    return movies, similarity, info, None
+    return movies, similarity, None
 
 @st.cache_data(show_spinner=False)
 def fetch_omdb_data(title):
@@ -188,7 +181,7 @@ def safe_poster_url(data):
 st.title(" Movie Recommender System ")
 st.write("Select a movie and click **Show Recommendations**. Posters, year and rating will be fetched from OMDb API.")
 
-movies, similarity, data_info, load_err = load_pickles()
+movies, similarity, load_err = load_pickles()
 if load_err:
     st.error(f"Error loading data: {load_err}")
     st.caption(
@@ -201,9 +194,6 @@ if load_err:
             "the latest `main` (or re-clone) and start the app again."
         )
     st.stop()
-
-if data_info:
-    st.info(data_info)
 
 movies_list = movies['title'].values
 select_movie = st.selectbox("Select a movie", movies_list)
