@@ -4,20 +4,56 @@ import requests
 import os
 
 
+# Resolve the data files relative to this script, so the app works no matter
+# which directory Streamlit is launched from (fresh clones, IDE terminals, ...).
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MOVIES_PATH = os.path.join(BASE_DIR, "movies_list.pkl")
+SIM_PATH = os.path.join(BASE_DIR, "similarity.pkl")
+
+
 API_KEY = "c0ccea73"   
 NUM_RECS = 5           
 
 st.set_page_config(page_title="Movie Recommender", layout="wide")
 
-@st.cache_data
-def load_pickles(movies_path="movies_list.pkl", sim_path="similarity.pkl"):
-    """Load pickles and return (movies_df, similarity_matrix)."""
+@st.cache_resource(show_spinner=False)
+def _load_pickles_cached(movies_path, sim_path):
+    """Load the pickles once and share them. Raises on failure.
+
+    cache_resource (not cache_data) is used because the ~800 MB similarity
+    matrix would otherwise be deep-copied from the cache on every rerun, and
+    because a failed load is never cached - so the app recovers by itself as
+    soon as the missing file shows up.
+    """
+    with open(movies_path, "rb") as f:
+        movies = pickle.load(f)
+    with open(sim_path, "rb") as f:
+        similarity = pickle.load(f)
+    return movies, similarity
+
+
+def _data_path(filename):
+    """Prefer the file next to app.py, else fall back to the launch directory."""
+    beside_script = os.path.join(BASE_DIR, filename)
+    if os.path.exists(beside_script):
+        return beside_script
+    in_cwd = os.path.join(os.getcwd(), filename)
+    if os.path.exists(in_cwd):
+        return in_cwd
+    return beside_script
+
+
+def load_pickles(movies_path=None, sim_path=None):
+    """Load pickles and return (movies_df, similarity_matrix, error_or_None)."""
+    movies_path = _data_path(movies_path or "movies_list.pkl")
+    sim_path = _data_path(sim_path or "similarity.pkl")
     try:
-        movies = pickle.load(open(movies_path, "rb"))
-        similarity = pickle.load(open(sim_path, "rb"))
+        movies, similarity = _load_pickles_cached(movies_path, sim_path)
         return movies, similarity, None
+    except FileNotFoundError as e:
+        return None, None, f"Missing data file: {e.filename}"
     except Exception as e:
-        return None, None, str(e)
+        return None, None, f"{type(e).__name__}: {e}"
 
 @st.cache_data(show_spinner=False)
 def fetch_omdb_data(title):
@@ -50,6 +86,18 @@ st.write("Select a movie and click **Show Recommendations**. Posters, year and r
 movies, similarity, load_err = load_pickles()
 if load_err:
     st.error(f"Error loading pickles: {load_err}")
+    st.caption(
+        f"Searched next to `app.py` in `{BASE_DIR}` "
+        f"and in the working directory `{os.getcwd()}`."
+    )
+    if not os.path.exists(SIM_PATH):
+        st.warning(
+            "`similarity.pkl` is not stored in the GitHub repo (it is ~800 MB, well over "
+            "GitHub's 100 MB per-file limit), so a fresh clone will not contain it. "
+            "Generate it locally, once:\n\n"
+            f"```\ncd \"{BASE_DIR}\"\npython generate_similarity.py\n```\n"
+            "This takes about 1-2 minutes and only needs `movies_list.pkl` + scikit-learn."
+        )
     st.stop()
 
 if not hasattr(movies, "shape") or "title" not in movies.columns:
