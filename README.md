@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 🎬 Movie Recommendation System
 
 A Content-Based Filtering ML Project
